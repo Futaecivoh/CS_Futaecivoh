@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Стена комментариев</title>
+  </head>
+  <body>
+    <h1>Оставьте комментарий</h1>
+    <form action="/comments" method="post">
+      <input type="text" name="text" placeholder="Ваше сообщение" required />
+      <button type="submit">Отправить</button>
+    </form>
+    <hr />
+    <h2>Все комментарии:</h2>
+    <ul>
+      {% for comment in comments %}
+        <li>{{ comment }}</li>
+      {% endfor %}
+    </ul>
+  </body>
+</html>
