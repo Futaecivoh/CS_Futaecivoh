@@ -1,11 +1,15 @@
 from fastapi import FastAPI
 from schemas import UserCreate
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
-from fastapi import FastAPI, Request, Depends,HTTPException, Form
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi import FastAPI, Request, Depends,HTTPException, Form, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.sessions import SessionMiddleware
 import bleach
+import uuid
+import os
+import shutil
+import filetype
 
 def clean_text(text: str):
     allowed_tags = ['b', 'i', 'u', 'em', 'strong']
@@ -138,6 +142,22 @@ def get_all_files(user: dict = Depends(get_current_user)):
 def get_file(file: dict = Depends(check_file_permissions)):
     return file
 
+@app.get("/files/{file_id}/download")
+def download_file(
+    file: dict = Depends(check_file_permissions)
+):
+    file_path = file.get("path")
+    original_name = file.get("filename")
+
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found on server")
+
+    return FileResponse(
+        path=file_path,
+        filename=original_name,
+        media_type="application/octet-stream"
+    )
+
 @app.delete("/files/{file_id}")
 def delete_file(
     file: dict = Depends(check_file_permissions)
@@ -151,3 +171,55 @@ def delete_file(
         "status": "deleted",
         "file_id": file["id"]
     }
+
+MAX_FILE_SIZE = 2 * 1024 * 1024
+STORAGE_DIR = "../storage"
+
+@app.post("/files/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    head = await file.read(2048)
+    kind = filetype.guess(head)
+
+    if kind is None or kind.mime not in ["image/jpeg", "image/png"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only JPEG and PNG are allowed."
+        )
+
+    await file.seek(0)
+
+    new_filename = f"{uuid.uuid4()}{os.path.splitext(file.filename)[1]}"
+    file_path = os.path.join(STORAGE_DIR, new_filename)
+
+    total_size = 0
+
+    with open(file_path, "wb") as buffer:
+        while chunk := await file.read(1024 * 1024):
+            total_size += len(chunk)
+
+            if total_size > MAX_FILE_SIZE:
+                buffer.close()
+                os.remove(file_path)
+                raise HTTPException(
+                    status_code=413,
+                    detail="File is too large. Max size is 2MB."
+                )
+
+            buffer.write(chunk)
+
+    new_id = max([f["id"] for f in files_db] + [0]) + 1
+
+    file_meta = {
+        "id": new_id,
+        "filename": file.filename,
+        "path": file_path,
+        "owner": user["username"],
+        "size": total_size
+    }
+
+    files_db.append(file_meta)
+
+    return {"message": "File uploaded successfully", "file_id": new_id}

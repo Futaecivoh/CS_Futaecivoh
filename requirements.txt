@@ -16,9 +16,11 @@ dnspython==2.8.0
 email-validator==2.3.0
 fastapi==0.136.1
 filelock==3.29.0
+filetype==1.2.0
 h11==0.16.0
 identify==2.6.19
 idna==3.13
+itsdangerous==2.2.0
 Jinja2==3.1.6
 license-expression==30.4.4
 markdown-it-py==4.0.0
@@ -40,6 +42,7 @@ Pygments==2.20.0
 pyparsing==3.3.2
 python-discovery==1.2.2
 python-dotenv==1.2.2
+python-multipart==0.0.27
 pytz==2026.1.post1
 PyYAML==6.0.3
 requests==2.33.1
