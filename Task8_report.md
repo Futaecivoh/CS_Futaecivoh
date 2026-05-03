@@ -13,7 +13,7 @@
                 detail="Not authenticated"
             )
         return user
-### Сделаем отдельный скрипт проверки всего этого
+### Сделаем отдельный скрипт проверки
 
     def test_security():
     s = requests.Session()
