@@ -5,18 +5,18 @@
 ### Dependency Injection
 Чтобы не прописывать сотню раз `if` `else`, мы просто сделаем отдельную функцию
 
-`def get_current_user(request: Request):
-    user = request.session.get("user")
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated"
-        )
-    return user`
+    def get_current_user(request: Request):
+        user = request.session.get("user")
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="Not authenticated"
+            )
+        return user
 ### Сделаем отдельный скрипт проверки всего этого
 
-`def test_security():
-    s = requests.Session()`
+    def test_security():
+    s = requests.Session()
 
     print("=== Тест 1 ===")
     login(s, "alice", "123")
