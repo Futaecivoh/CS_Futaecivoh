@@ -10,6 +10,16 @@ import uuid
 import os
 import shutil
 import filetype
+from cryptography.fernet import Fernet
+from io import BytesIO
+from fastapi.responses import StreamingResponse
+
+load_dotenv("../.env")
+
+key = os.getenv("ENCRYPTION_KEY")
+if not key:
+    raise RuntimeError("ENCRYPTION_KEY is missing in .env file!")
+cipher_suite = Fernet(key.encode())
 
 def clean_text(text: str):
     allowed_tags = ['b', 'i', 'u', 'em', 'strong']
@@ -152,10 +162,26 @@ def download_file(
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server")
 
-    return FileResponse(
-        path=file_path,
-        filename=original_name,
-        media_type="application/octet-stream"
+    if not file.get("is_encrypted"):
+         return FileResponse(
+            path=file_path,
+            filename=original_name,
+            media_type="application/octet-stream"
+        )
+
+    with open(file_path, "rb") as f:
+        encrypted_data = f.read()
+
+    try:
+        decrypted_data = cipher_suite.decrypt(encrypted_data)
+    except Exception:
+
+        raise HTTPException(status_code=500, detail="Failed to decrypt file.")
+
+    return StreamingResponse(
+        BytesIO(decrypted_data),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename={original_name}"}
     )
 
 @app.delete("/files/{file_id}")
@@ -178,15 +204,19 @@ STORAGE_DIR = "../storage"
 @app.post("/files/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    encrypt: bool = False,
     user: dict = Depends(get_current_user)
 ):
     head = await file.read(2048)
     kind = filetype.guess(head)
 
-    if kind is None or kind.mime not in ["image/jpeg", "image/png"]:
+    is_valid_image = kind is not None and kind.mime in ["image/jpeg", "image/png"]
+    is_text_file = file.filename.endswith(".txt")
+
+    if not (is_valid_image or is_text_file):
         raise HTTPException(
             status_code=400,
-            detail="Invalid file type. Only JPEG and PNG are allowed."
+            detail="Invalid file type. Only JPEG, PNG and TXT are allowed."
         )
 
     await file.seek(0)
@@ -194,21 +224,18 @@ async def upload_file(
     new_filename = f"{uuid.uuid4()}{os.path.splitext(file.filename)[1]}"
     file_path = os.path.join(STORAGE_DIR, new_filename)
 
-    total_size = 0
+    file_data = await file.read()
+
+    if len(file_data) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="File is too large.")
+
+    if encrypt:
+        file_data = cipher_suite.encrypt(file_data)
 
     with open(file_path, "wb") as buffer:
-        while chunk := await file.read(1024 * 1024):
-            total_size += len(chunk)
+        buffer.write(file_data)
 
-            if total_size > MAX_FILE_SIZE:
-                buffer.close()
-                os.remove(file_path)
-                raise HTTPException(
-                    status_code=413,
-                    detail="File is too large. Max size is 2MB."
-                )
-
-            buffer.write(chunk)
+    total_size = 0
 
     new_id = max([f["id"] for f in files_db] + [0]) + 1
 
@@ -217,9 +244,10 @@ async def upload_file(
         "filename": file.filename,
         "path": file_path,
         "owner": user["username"],
-        "size": total_size
+        "size": total_size,
+        "is_encrypted": encrypt
     }
 
     files_db.append(file_meta)
 
-    return {"message": "File uploaded successfully", "file_id": new_id}
+    return {"message": "File uploaded successfully", "file_id": new_id, "encrypted": encrypt}
