@@ -1,6 +1,7 @@
 FROM python:3.10-slim
 
-RUN addgroup --system appuser && adduser --system --group appuser
+RUN addgroup --system --gid 1000 appuser && \
+    adduser --system --uid 1000 --gid 1000 --home /app --shell /bin/bash appuser
 
 WORKDIR /app
 
