@@ -49,4 +49,3 @@
 
 ## Тестирование
 <img width="630" height="194" alt="photo_2026-05-03_19-48-08" src="https://github.com/user-attachments/assets/53665199-1279-4810-b643-18b6db419754" />
-
