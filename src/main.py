@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from schemas import UserCreate
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi import FastAPI, Request, Depends,HTTPException, Form, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.sessions import SessionMiddleware
@@ -13,6 +13,7 @@ import filetype
 from cryptography.fernet import Fernet
 from io import BytesIO
 from fastapi.responses import StreamingResponse
+from logger_config import logger
 
 load_dotenv("../.env")
 
@@ -58,13 +59,8 @@ def login(
 ):
     user = users_db.get(username)
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
-
-    if user["password"] != password:
+    if not user or user["password"] != password:
+        logger.warning(f"Security Alert: Failed login attempt for username '{username}'")
         raise HTTPException(
             status_code=401,
             detail="Invalid credentials"
@@ -251,3 +247,15 @@ async def upload_file(
     files_db.append(file_meta)
 
     return {"message": "File uploaded successfully", "file_id": new_id, "encrypted": encrypt}
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception at {request.url}: {exc}", exc_info=True)
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "We are sorry, something went wrong."}
+    )
+@app.get("/cause_error")
+def cause_error():
+    return 1 / 0
