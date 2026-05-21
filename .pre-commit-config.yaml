@@ -12,3 +12,8 @@ repos:
         entry: pip-audit -r
         language: system
         files: requirements.txt
+-   repo: https://github.com/PyCQA/bandit
+    rev: '1.7.5'
+    hooks:
+    -   id: bandit
+        args: ["-r", "main.py", "src", "-ll"]
